@@ -19,7 +19,7 @@ repositories {
 
 dependencies {
     testImplementation(kotlin("test"))
-    implementation("com.google.code.gson", "gson","2.12.1")
+    implementation("com.google.code.gson", "gson", "2.12.1")
     implementation("org.jetbrains.kotlin", "kotlin-reflect", "2.1.20")
     implementation("org.jetbrains.kotlinx", "kotlinx-serialization-core", "1.8.1")
     implementation("io.netty", "netty-buffer", "4.2.0.Final")
@@ -31,7 +31,7 @@ tasks.test {
 }
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(21)
 }
 
 tasks.jar {
