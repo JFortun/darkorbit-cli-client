@@ -9,6 +9,7 @@ import com.github.m9w.feature.annotations.OnPackage
 import com.github.m9w.feature.annotations.Repeat
 import com.github.m9w.feature.suspend.ExceptPacketException
 import com.github.m9w.protocol.Factory
+import java.io.Closeable
 import java.lang.RuntimeException
 import java.util.*
 import java.util.concurrent.atomic.AtomicReference
@@ -21,7 +22,7 @@ import kotlin.reflect.jvm.isAccessible
 import kotlin.reflect.jvm.jvmErasure
 
 
-class Scheduler(vararg ctx: Any) : Runnable {
+class Scheduler(vararg ctx: Any) : Runnable, Closeable {
     private val eventPacketQueue = LinkedList<ProtocolPacket>()
     private val eventQueue = LinkedList<Pair<String, String>>()
     private val eventHandlers: MutableMap<String, MutableSet<PendingFuture>> = HashMap()
@@ -65,12 +66,12 @@ class Scheduler(vararg ctx: Any) : Runnable {
             future.resume()
         }
         if (interruptKey.isNotEmpty()) timerCancellationKeys.getOrPut(interruptKey) { mutableListOf() } += interrupt
-        ms.schedule(resume.get())
+        schedule(ms, resume.get())
     }
 
     fun cancelWaitMs(key: String, block: (()-> Exception)? = null) = timerCancellationKeys.remove(key)?.forEach { it.invoke(block) }
 
-    fun interruptIn(future: Future<*>, ms: Long, block: () -> Exception) = ms.schedule { future.interrupt(block) }
+    fun interruptIn(future: Future<*>, ms: Long, block: () -> Exception) = schedule(ms) { future.interrupt(block) }
 
     fun handleEvent(packet: ProtocolPacket) {
         synchronized(eventPacketQueue) {
@@ -136,15 +137,23 @@ class Scheduler(vararg ctx: Any) : Runnable {
                 e.printStackTrace()
             }
         }
+        Context.clear()
     }
 
-    private fun Long.schedule(callback: () -> Unit) {
-        timerQueue.getOrPut(System.currentTimeMillis() + this) { mutableListOf() } += callback
+    fun schedule(delay: Long = 0, callback: () -> Unit) {
+        timerQueue.getOrPut(System.currentTimeMillis() + delay) { mutableListOf() } += callback
+        if (delay == 0L) synchronized(lock) { lock.notifyAll() }
     }
 
     fun start() {
         thread = Thread(this, "Scheduler instance")
         thread.start()
+    }
+
+    override fun close() {
+        isRun = false
+        engine.disconnect()
+        thread.interrupt()
     }
 
     data class PendingFuture(private val isSuccess: (String) -> Boolean = { true },
@@ -161,7 +170,7 @@ class Scheduler(vararg ctx: Any) : Runnable {
         init { method.isAccessible = true }
         override fun postAction() = schedule()
         override fun schedule(){
-            (if (noInitDelay) 0 else ms).schedule {
+            schedule(if (noInitDelay) 0 else ms) {
                 run({ method.callSuspend(instance) }, { method.call(instance) })
             }
             noInitDelay = false

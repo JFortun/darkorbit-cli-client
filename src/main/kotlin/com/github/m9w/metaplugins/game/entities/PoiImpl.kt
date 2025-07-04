@@ -6,7 +6,7 @@ import com.github.m9w.metaplugins.game.Point
 import kotlin.collections.chunked
 import kotlin.math.*
 
-class PoiImpl(root: EntitiesModule, poi: MapAddPOICommand) : EntityImpl(root, 0, poi.poiId, poi.shapeCoordinates[0], poi.shapeCoordinates[1]) {
+class PoiImpl(root: EntitiesModule, id: Long, poi: MapAddPOICommand) : EntityImpl(root, id, poi.poiId, poi.shapeCoordinates[0], poi.shapeCoordinates[1]) {
     val shapeType: ShapeType = poi.shape
     val cords: List<Point> = if (shapeType != ShapeType.CIRCLE) poi.shapeCoordinates.chunked(2).map { it[0] to it[1] } else listOf(-1 to -1)
     private val minX: Int = cords.minOf { it.x }
@@ -16,15 +16,17 @@ class PoiImpl(root: EntitiesModule, poi: MapAddPOICommand) : EntityImpl(root, 0,
     val radius: Int = if (shapeType == ShapeType.CIRCLE) poi.shapeCoordinates[2] else -1
     val type: POIType = poi.poiType.typeValue
     val design: POIDesign = poi.design.designValue
+    val typeSpec: String = poi.poiTypeSpecification
     val active: Boolean = poi.active
     val inverted: Boolean = poi.inverted
 
     override fun toString() = super.toString() +
             "Type $type\n" +
             "Design $design\n" +
-            if (shapeType == ShapeType.CIRCLE) "Radius $radius\n" else "Coordinates $cords\n" +
-            "Active $active\n" +
-            "Inverted $inverted\n"
+            (if (shapeType == ShapeType.CIRCLE) "Radius $radius\n" else "Coordinates $cords\n") +
+            (if (typeSpec.isNotEmpty()) "Specification $typeSpec\n" else "") +
+            (if (!active) "Inactive\n" else "") +
+            (if (inverted) "Inverted\n" else "")
 
     fun getPoints(): List<Point> {
         return if (shapeType == ShapeType.CIRCLE) {
